@@ -1,64 +1,50 @@
-import os
 import re
 import requests
-from markdownify import markdownify as md
-from dotenv import load_dotenv
 
-load_dotenv()
+from load_env import ZENDESK_BASE_URL
 
-ZENDESK_BASE_URL = os.getenv('ZENDESK_BASE_URL')
+ARTICLES_URL = f'{ZENDESK_BASE_URL}/api/v2/help_center/articles'
 
 def slugify(text):
     trimmed = text.lower().strip()
     removed_special_chars = re.sub(r'[^\w\s-]', '', trimmed)
     return re.sub(r'[-\s]+', '-', removed_special_chars)
 
-def fetch_articles():
-    ARTICLES_URL = f'{ZENDESK_BASE_URL}/api/v2/help_center/articles'
-    print(f'Fetching articles...')
-    response = requests.get(ARTICLES_URL, {
-        'sort_by': 'position',
-        'sort_order': 'asc',
-        'page': 1,
-        'per_page': 100,
+def fetch_articles_page(page: int):
+    return requests.get(ARTICLES_URL, {
+        'sort_by': 'updated_at',
+        'page': page,
+        'per_page': 50,
     })
-    if response.status_code != 200:
-        print('Failed to fetch articles from Zendesk API.')
-        return []
-    
-    return response.json().get('articles', [])
 
-def process_articles(articles: list):
-    output_dir = 'data'
-    os.makedirs(output_dir, exist_ok=True)
-    processed_articles = []
-    for art in articles:
-        # Skip empty or draft articles
-        if not art.get('body') or art.get('draft'):
-            continue
-            
-        title = art['title']
-        slug = slugify(title)
-        html_body = art['body']
-        url = art['html_url']
-        updated_at = art['updated_at']
+def fetch_articles(should_fetch_all: bool):
+    print(f'Fetching articles...')
+    articles = []
+    current_page = 1
+    should_load_more = True
 
-        # Append source metadata to the top of the body for RAG references
-        full_html = f'<h1>{title}</h1><p><strong>Article URL:</strong> {url}</p>{html_body}'
-        
-        markdown_content = md(full_html, heading_style='ATX')
-        
-        file_path = os.path.join(output_dir, f'{slug}.md')
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(markdown_content)
-            
-        processed_articles.append({
-            'id': art['id'],
-            'slug': slug,
-            'file_path': file_path,
-            'updated_at': updated_at,
-            'url': url
-        })
-        
-    print(f'Successfully saved {len(processed_articles)} markdown articles.')
-    return processed_articles
+    try:
+        initial_response = fetch_articles_page(page=current_page)
+        initial_response.raise_for_status()
+        current_response = initial_response.json()
+        current_page += 1
+        articles.extend(current_response.get('articles', []))
+        should_load_more = should_fetch_all and current_response.get('page_count', 1) > current_page
+    except requests.exceptions.HTTPError as err:
+        return articles
+
+    if not should_fetch_all:
+        return articles
+
+    while should_load_more:
+        try:
+            response = fetch_articles_page(page=current_page)
+            response.raise_for_status()
+            current_response = response.json()
+            should_load_more = current_response.get('page_count', 1) > current_page
+            current_page += 1
+            articles.extend(current_response.get('articles', []))
+        except requests.exceptions.HTTPError as err:
+            return articles    
+
+    return articles

@@ -1,29 +1,51 @@
-import os
+import time
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
+from load_env import OPENAI_API_KEY, VECTOR_STORE_ID
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-vector_store_id = os.getenv('VECTOR_STORE_ID')
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-def sync_articles_to_vector_store(processed_articles: list):
-  file_paths = [article['file_path'] for article in processed_articles if os.path.exists(article['file_path'])]
+def sync_articles_to_vector_store(to_add: list, to_update: list, manifest: dict):
+  new_manifest = {**manifest}
 
-  if not file_paths:
-    print('No local files to upload')
-    return
+  for file_to_update in to_update:
+    try:
+      file_id = new_manifest[file_to_update['id']]['file_id']
+      client.vector_stores.files.delete(file_id=file_id, vector_store_id=VECTOR_STORE_ID)
+      client.files.delete(file_id)
+      time.sleep(0.2)
+    except Exception as error:
+      print(f'Error deleting file {error}, skipping')
+      continue
 
-  file_streams = [open(path, 'rb') for path in file_paths]
-  print(f'Uploading {len(file_streams)} files to vector store...')
+  articles = to_add + to_update
 
-  file_batch = client.vector_stores.file_batches.upload_and_poll(vector_store_id, files=file_streams)
+  if not articles:
+    return new_manifest
 
-  for fs in file_streams:
-    fs.close()
+  uploaded_files = []
 
-  print(f'Batch status: {file_batch.status}')
-  print(f'File counts: {file_batch.file_counts}')
+  for article in articles:
+    try:
+      file_stream = open(article['file_path'], 'rb')
+      uploaded_file = client.files.create(file=file_stream, purpose='assistants')
+      file_stream.close()
+      new_manifest[article['id']] = {
+        'file_id': uploaded_file.id,
+        'updated_at': article['updated_at']
+      }
+      uploaded_files.append({
+        'file_id': uploaded_file.id,
+        'attributes': {
+          'article_id': article['id']
+        }
+      })
+      time.sleep(0.2)
+    except Exception as error:
+      continue
 
-  return
+  client.vector_stores.file_batches.create_and_poll(vector_store_id=VECTOR_STORE_ID,files=uploaded_files)
+  print(f'{len(uploaded_files)} files uploaded')
+
+  return new_manifest
