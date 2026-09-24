@@ -4,7 +4,6 @@ import re
 from markdownify import markdownify as md
 from datetime import datetime
 from load_env import DATA_PATH
-from manifest import load_manifest
 
 def slugify(text):
     trimmed = text.lower().strip()
@@ -14,9 +13,8 @@ def slugify(text):
 def get_date_time(timestamp: str):
     return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
 
-def process_articles(articles: list):
+def process_articles(articles: list, manifest: dict):
     os.makedirs(DATA_PATH, exist_ok=True)
-    manifest = load_manifest()
     to_update = []
     to_add = []
     added, updated, skipped = 0, 0, 0
