@@ -1,7 +1,7 @@
 import re
 import requests
 
-from load_env import ZENDESK_BASE_URL
+from load_env import ZENDESK_BASE_URL, SHOULD_FETCH_ALL_ARTICLES
 
 ARTICLES_URL = f'{ZENDESK_BASE_URL}/api/v2/help_center/articles'
 
@@ -17,7 +17,7 @@ def fetch_articles_page(page: int):
         'per_page': 50,
     })
 
-def fetch_articles(should_fetch_all: bool):
+def fetch_articles():
     print(f'Fetching articles...')
     articles = []
     current_page = 1
@@ -29,11 +29,11 @@ def fetch_articles(should_fetch_all: bool):
         current_response = initial_response.json()
         current_page += 1
         articles.extend(current_response.get('articles', []))
-        should_load_more = should_fetch_all and current_response.get('page_count', 1) > current_page
+        should_load_more = SHOULD_FETCH_ALL_ARTICLES and current_response.get('page_count', 1) > current_page
     except requests.exceptions.HTTPError as err:
         return articles
 
-    if not should_fetch_all:
+    if not SHOULD_FETCH_ALL_ARTICLES:
         return articles
 
     while should_load_more:

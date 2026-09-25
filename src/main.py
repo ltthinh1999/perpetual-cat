@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
   start_time = time.time()
 
-  articles = fetch_articles(should_fetch_all=False)
+  articles = fetch_articles()
   manifest = construct_manifest_from_vector_store()
   [to_add, to_update] = process_articles(articles, manifest)
   sync_articles_to_vector_store(to_add, to_update, manifest)

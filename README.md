@@ -25,13 +25,14 @@ Ensure you have the following installed locally:
 
 Create a `.env` file in the root directory of your project to safely store your developer credentials.
 
-# OpenAI Configuration
-
 ```
 ZENDESK_BASE_URL=
 OPENAI_API_KEY=
 VECTOR_STORE_ID=
+SHOULD_FETCH_ALL_ARTICLES=
 ```
+
+Set `SHOULD_FETCH_ALL_ARTICLES=True` to enable loading all articles, but note that it will process slower and easiler to hit rate limit
 
 ---
 
@@ -51,7 +52,7 @@ On Windows use: `.venv\Scripts\activate`
 
 3.  Execute the Synchronization Pipeline:
 
-`python src/main.py`
+`python src/main.py` or `python3 src/main.py`
 
 ---
 
